@@ -1,56 +1,73 @@
 let grokEnabled = true;
+let grokMode = 'blur';
 
-// Safely load the setting once
-if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
-  chrome.storage.sync.get(['grokEnabled'], result => {
-    grokEnabled = result.grokEnabled ?? true;
-    runTweetFilter();
-  });
-} else {
-  console.warn('[GrokBlocker] chrome.storage unavailable, running with default settings.');
-  runTweetFilter();
-}
-
-function runTweetFilter() {
-  getRidOfAnnoyingTweets();
-
-  const observer = new MutationObserver(() => {
-    getRidOfAnnoyingTweets();
-  });
-
-  observer.observe(document.body, { childList: true, subtree: true });
-
-  // Support Twitter SPA URL change
-  let lastUrl = location.href;
-  const urlObserver = new MutationObserver(() => {
-    if (location.href !== lastUrl) {
-      lastUrl = location.href;
-      getRidOfAnnoyingTweets();
+function init() {
+  chrome.runtime.sendMessage({ type: 'getSettings' }, (response) => {
+    if (response) {
+      grokEnabled = response.grokEnabled;
+      grokMode = response.grokMode;
+      runTweetFilter();
     }
   });
-  urlObserver.observe(document, { subtree: true, childList: true });
 }
 
-function getRidOfAnnoyingTweets() {
-  if (!grokEnabled) return;
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.type === 'settingsUpdated') {
+    grokEnabled = message.data.grokEnabled;
+    grokMode = message.data.grokMode;
+    applyFilter();
+  }
+});
 
-  chrome.storage.sync.get(['grokMode'], result => {
-    const mode = result.grokMode || 'blur';
+let observer = null;
+let urlObserver = null;
 
-    const tweets = document.querySelectorAll('article');
-    tweets.forEach(tweet => {
-      if (tweet.innerText.toLowerCase().includes('@grok')) {
-        if (mode === 'remove') {
-          hardRemove(tweet);
-        } else {
-          blur(tweet);
+function runTweetFilter() {
+  applyFilter();
+
+  if (observer) observer.disconnect();
+  observer = new MutationObserver(applyFilter);
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  let lastUrl = location.href;
+
+  if (urlObserver) urlObserver.disconnect();
+
+  urlObserver = new MutationObserver(() => {
+    try {
+      if (typeof location !== 'undefined' && location.href) {
+        const currentUrl = location.href;
+        if (currentUrl !== lastUrl) {
+          lastUrl = currentUrl;
+          applyFilter();
         }
       }
-    });
+    } catch (e) {
+      console.warn('[GrokBlocker] Failed to access location.href', e);
+    }
+  });
+
+
+  urlObserver.observe(document, { childList: true, subtree: true });
+}
+
+function applyFilter() {
+  if (!grokEnabled) return;
+
+  const tweets = document.querySelectorAll('article');
+
+  tweets.forEach(tweet => {
+    if (tweet.innerText.toLowerCase().includes('@grok')) {
+      if (grokMode === 'remove') {
+        hardRemove(tweet);
+      } else {
+        blur(tweet);
+      }
+    }
   });
 }
 
-function blur(tweet){
+function blur(tweet) {
   if (tweet.classList.contains('grok-blurred')) return;
 
   tweet.classList.add('grok-blurred');
@@ -63,6 +80,13 @@ function blur(tweet){
   }, { once: true });
 }
 
-function hardRemove(tweet){
+function hardRemove(tweet) {
   tweet.remove();
 }
+
+window.addEventListener('beforeunload', () => {
+  if (observer) observer.disconnect();
+  if (urlObserver) urlObserver.disconnect();
+});
+
+init();
