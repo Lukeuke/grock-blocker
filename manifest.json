@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Grok Blocker for Twitter/X",
+  "author": "https://github.com/Lukeuke/",
+  "version": "0.0.1",
+  "description": "Removes tweets containing @grok",
+  "permissions": ["storage"],
+   "action": {
+    "default_popup": "./UI/popup.html",
+    "default_icon": "icon.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://twitter.com/*", "*://x.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
