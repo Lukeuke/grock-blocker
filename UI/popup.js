@@ -15,7 +15,7 @@ toggleButton.addEventListener('click', () => {
     const newState = !current;
 
     chrome.storage.sync.set({ grokEnabled: newState }, () => {
-      toggleButton.textContent = newState ? 'Enable @grok filter' : 'Disable @grok filter';
+      toggleButton.textContent = newState ? 'Disable @grok filter' : 'Enable @grok filter';
     });
   });
 });
